@@ -1,0 +1,46 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Bot {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  published   Boolean  @default(false)
+  flow        String   @default("[]") // JSON serialized Block[]
+  theme       String   @default("{}") // JSON serialized Theme
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  conversations Conversation[]
+  answers      Answer[]
+}
+
+model Conversation {
+  id            String   @id @default(cuid())
+  botId         String
+  bot           Bot      @relation(fields: [botId], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now())
+  completedAt   DateTime?
+  isCompleted   Boolean  @default(false)
+  answers       Answer[]
+}
+
+model Answer {
+  id            String   @id @default(cuid())
+  botId         String
+  bot           Bot      @relation(fields: [botId], references: [id], onDelete: Cascade)
+  conversationId String
+  conversation  Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  blockId       String
+  variable      String?
+  value         String
+  createdAt     DateTime @default(now())
+
+  @@index([botId])
+  @@index([conversationId])
+}
