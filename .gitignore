@@ -6,3 +6,4 @@ node_modules
 *.dbn
 data/
 tsconfig.tsbuildinfo
+.venv/

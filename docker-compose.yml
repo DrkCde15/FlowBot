@@ -2,12 +2,31 @@ version: "3.8"
 
 services:
   app:
-    build: .
+    build:
+      context: ./frontend
+      dockerfile: ../Dockerfile
     ports:
       - "3000:3000"
     environment:
       - DATABASE_URL=file:/data/flowbot.db
+      - PYTHON_BACKEND_URL=http://backend:8000
       - NEXT_TELEMETRY_DISABLED=1
+    volumes:
+      - db-data:/data
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite:////data/flowbot.db
+      - CORS_ALLOW_ORIGINS=http://localhost:3000
+      - INTEGRATIONS_SECRET=${INTEGRATIONS_SECRET:-change-me-integrations-hmac}
     volumes:
       - db-data:/data
     restart: unless-stopped
