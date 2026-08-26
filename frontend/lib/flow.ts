@@ -4,7 +4,16 @@ export type BlockType =
   | "input"
   | "buttons"
   | "date"
-  | "stripe";
+  // ações / integrações
+  | "ai"
+  | "whatsapp"
+  | "telegram"
+  | "google_sheets"
+  | "google_docs"
+  | "http"
+  | "payment"
+  | "memory"
+  | "file";
 
 export type InputKind = "text" | "email" | "number" | "phone";
 
@@ -20,6 +29,68 @@ export interface Branch {
   value?: string;
   /** Target block id when the condition matches */
   next: string | null;
+}
+
+// --- Configurações das ações / integrações ---
+
+export interface AIConfig {
+  provider?: string; // openai | anthropic | google | deepseek | groq | mistral | openrouter | together | perplexity | xai | ollama | azure | custom
+  model?: string;
+  system?: string;
+  prompt?: string;
+  variable?: string;
+  maxTokens?: number;
+  apiKey?: string; // opcional: chave por card (senão usa a da integração "ai")
+  baseUrl?: string; // opcional: base URL por card (provedores custom/ollama)
+  endpoint?: string; // opcional: endpoint do Azure por card
+}
+
+export interface MessagingConfig {
+  to?: string;
+  message?: string;
+}
+
+export interface GoogleSheetsConfig {
+  spreadsheetId?: string;
+  sheet?: string;
+  values?: string; // colunas separadas por vírgula, suporta {{variavel}}
+}
+
+export interface GoogleDocsConfig {
+  documentId?: string;
+  text?: string;
+}
+
+export interface HTTPConfig {
+  method?: string;
+  url?: string;
+  headers?: string; // JSON opcional
+  body?: string;
+  authUser?: string;
+  authPass?: string;
+}
+
+export interface PaymentConfig {
+  provider?: string; // mercadopago | pagseguro | pagarme | asaas | paypal | link
+  amount?: number; // em centavos
+  currency?: string;
+  description?: string;
+  variable?: string;
+  url?: string; // usado no modo "link"
+}
+
+export interface MemoryConfig {
+  operation?: "set" | "get" | "list";
+  key?: string;
+  value?: string;
+  dbType?: "sqlite" | "postgres" | "mysql";
+  connection?: string;
+  user?: string;
+  password?: string;
+}
+
+export interface FileConfig {
+  operation?: "export_json" | "export_csv";
 }
 
 export interface Block {
@@ -40,7 +111,7 @@ export interface Block {
   url?: string;
   alt?: string;
 
-  // input / buttons / date / stripe
+  // input / buttons / date
   label?: string;
   placeholder?: string;
   inputKind?: InputKind;
@@ -52,14 +123,16 @@ export interface Block {
   // date
   format?: string;
 
-  // stripe
-  stripe?: {
-    publishableKey?: string;
-    priceId?: string;
-    amount?: number; // in cents
-    currency?: string;
-    mode?: "payment" | "subscription";
-  };
+  // ações / integrações
+  ai?: AIConfig;
+  whatsapp?: MessagingConfig;
+  telegram?: MessagingConfig;
+  google_sheets?: GoogleSheetsConfig;
+  google_docs?: GoogleDocsConfig;
+  http?: HTTPConfig;
+  payment?: PaymentConfig;
+  memory?: MemoryConfig;
+  file?: FileConfig;
 }
 
 export interface Theme {
@@ -85,6 +158,19 @@ export const defaultTheme: Theme = {
   embedType: "bubble",
   bubbleText: "Chat with us",
 };
+
+/** Tipos de bloco que disparam uma ação no backend (sem input do usuário). */
+export const ACTION_TYPES: BlockType[] = [
+  "ai",
+  "whatsapp",
+  "telegram",
+  "google_sheets",
+  "google_docs",
+  "http",
+  "payment",
+  "memory",
+  "file",
+];
 
 export function emptyFlow(): Block[] {
   return [

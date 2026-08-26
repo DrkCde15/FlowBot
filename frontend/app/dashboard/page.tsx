@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import ThemeToggle from "@/components/ThemeToggle";
 
 type BotSummary = {
   id: string;
@@ -62,6 +63,7 @@ export default function Dashboard() {
           >
             Docs
           </a>
+          <ThemeToggle />
         </header>
 
         <div className="mb-8">

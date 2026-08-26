@@ -15,7 +15,6 @@ COPY --from=build /app/.next ./.next
 COPY --from=build /app/public ./public
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/prisma ./prisma
-COPY --from=build /app/.env ./.env
 
 EXPOSE 3000
 CMD ["sh", "-c", "npx prisma db push --skip-generate && npm start"]

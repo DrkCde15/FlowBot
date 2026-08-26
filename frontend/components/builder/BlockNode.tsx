@@ -9,7 +9,6 @@ const ICONS: Record<string, string> = {
   input: "⌨️",
   buttons: "🔘",
   date: "📅",
-  stripe: "💳",
 };
 
 export default function BlockNode({

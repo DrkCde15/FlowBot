@@ -15,7 +15,15 @@ email, CRM). The two share a single SQLite database.
 - 🧩 **Visual editor** — drag-and-drop blocks to build a conversational flow
   - Text messages, Images
   - User inputs: text / email / number / phone, Date picker, Buttons
-  - Stripe payment step (stub — wire your keys)
+  - **IA block** — chama APIs de IA (OpenAI, Anthropic, Google/Gemini, DeepSeek,
+    Groq, Mistral, OpenRouter, Together, Perplexity, xAI, Ollama, custom) com
+    seletor de modelo e contador de tokens
+  - **Pagamento** — Mercado Pago, PagSeguro, Pagar.me, Asaas, PayPal ou link manual
+  - **WhatsApp / Telegram** — envia mensagens durante o fluxo
+  - **Google Sheets / Docs** — grava linhas e anexa texto (conta de serviço)
+  - **HTTP** — requisições a outros sites (body e headers opcionais, auth básica)
+  - **Memória** — persistência em SQLite (outros bancos pedem autenticação)
+  - **Arquivo** — importação/exportação de fluxos e respostas
 - 🔀 **Branching logic** — route the conversation based on the user's answer
 - 🎨 **Theme customization** — colors, fonts, corner radius, bubble/popup, position
 - 💻 **Embed anywhere** — copy one `<script>` tag to add a chat bubble / popup to any site
@@ -45,7 +53,6 @@ You need **two terminals** — the frontend proxies chat traffic to the backend.
 ```bash
 cd frontend
 npm install
-cp .env.example .env          # sets DATABASE_URL + PYTHON_BACKEND_URL
 npx prisma db push
 npm run db:seed               # optional demo bot at /b/demo
 npm run dev
@@ -56,7 +63,6 @@ npm run dev
 cd backend
 python3 -m venv .venv && source .venv/bin/activate
 python3 -m pip install -r requirements.txt   # use `python3 -m pip`, not bare `pip`
-cp .env.example .env          # DATABASE_URL already points to ../data/dev.db
 uvicorn app.main:app --reload --port 8000
 ```
 
@@ -113,10 +119,25 @@ backend/
 ## Integrations
 
 The Python backend ships a pluggable integration registry. Configure credentials
-in `backend/.env` (Slack, Discord, Telegram, Twilio, SMTP/SendGrid, n8n, CRM) and
-either call `POST /api/v1/tasks/dispatch` from the frontend, or set
-`RUNTIME_DISPATCH_INTEGRATIONS=slack,n8n` so the runtime fires them automatically
-on every answer. See `backend/README.md`.
+**in the database via the `/integrations` UI** (no `.env` file) and use them
+either as **builder blocks** (executed when the conversation reaches that block
+via `POST /api/v1/runtime/{slug}/action`) or as **notify integrations** fired
+automatically via `POST /api/v1/tasks/dispatch` (the auto-dispatch list is also
+set in the `/integrations` UI).
+
+Available integrations: `webhook`, `n8n`, `slack`, `discord`, `telegram`,
+`whatsapp`, `email`, `crm`, `ai` (OpenAI, Anthropic, Google/Gemini, DeepSeek,
+Groq, Mistral, OpenRouter, Together, Perplexity, xAI, Ollama, custom),
+`google_sheets`, `google_docs`, `http`, `payment` (Mercado Pago, PagSeguro,
+Pagar.me, Asaas, PayPal, link manual), `memory`, `file`.
+
+### Credenciais (cadastradas em /integrations, sem `.env`)
+- **IA:** chaves por provedor (ex: `openai_api_key`, `anthropic_api_key`, …)
+- **Pagamento:** token/secret por provedor (ex: `mercadopago_access_token`, `paypal_client_id`/`paypal_secret`, …)
+- **Google Sheets/Docs:** `credentials_json` (service account completo)
+- **WhatsApp:** Twilio (`account_sid`/`auth_token`/`from_number`) · **Telegram:** `bot_token` + `chat_id`
+- **Memória:** SQLite nativo (sem auth); Postgres/MySQL exigem `connection`+`user`+`password`
+- **Arquivos:** import/export via `POST /api/v1/files/import` e `GET /api/v1/files/export`
 
 ## Embedding a published bot
 
@@ -136,8 +157,8 @@ From the builder's **Embed** tab (publish the bot first):
 
 - Authentication is **not** included (single-tenant / self-hosted assumption). Add auth
   before exposing publicly.
-- Stripe is a **UI stub**: the block records a "paid" answer but does not call Stripe.
-  Wire a server route to create Checkout Sessions for real payments.
+- Payments use **Mercado Pago** (ou link manual) — configure `MERCADOPAGO_ACCESS_TOKEN`.
+  O bloco gera um link de checkout (`init_point`) que é exibido no chat.
 - Answers are stored per-conversation; the CSV export pivots variables into columns.
 - The runtime path depends on the Python backend. For a frontend-only mode you would
   revert the `/api/runtime/*` proxies to the original Next handlers.

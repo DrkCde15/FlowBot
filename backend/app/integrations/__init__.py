@@ -6,6 +6,15 @@ from app.integrations.telegram import TelegramAdapter
 from app.integrations.whatsapp import WhatsAppAdapter
 from app.integrations.email import EmailAdapter
 from app.integrations.crm import CrmAdapter
+from app.integrations.actions import (
+    AIAdapter,
+    FileAdapter,
+    GoogleDocsAdapter,
+    GoogleSheetsAdapter,
+    HTTPAdapter,
+    MemoryAdapter,
+    PaymentAdapter,
+)
 
 _REGISTRY: dict[str, IntegrationAdapter] = {
     adapter.name: adapter()
@@ -18,6 +27,14 @@ _REGISTRY: dict[str, IntegrationAdapter] = {
         WhatsAppAdapter,
         EmailAdapter,
         CrmAdapter,
+        # ações / integrações avançadas
+        AIAdapter,
+        GoogleSheetsAdapter,
+        GoogleDocsAdapter,
+        HTTPAdapter,
+        PaymentAdapter,
+        MemoryAdapter,
+        FileAdapter,
     )
 }
 

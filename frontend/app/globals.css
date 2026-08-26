@@ -3,12 +3,23 @@
 @tailwind utilities;
 
 :root {
-  --bg: #f6f7f9;
-  --surface: #ffffff;
-  --line: #e6e8ee;
-  --ink: #0f172a;
-  --muted: #64748b;
-  --accent: #5b5bd6;
+  --bg: 246 247 249;
+  --surface: 255 255 255;
+  --surface-2: 241 243 247;
+  --line: 230 232 238;
+  --ink: 15 23 42;
+  --muted: 100 116 139;
+  --accent: 91 91 214;
+}
+
+.dark {
+  --bg: 9 11 17;
+  --surface: 17 24 39;
+  --surface-2: 30 41 59;
+  --line: 39 47 64;
+  --ink: 226 232 240;
+  --muted: 148 163 184;
+  --accent: 109 107 224;
 }
 
 @layer base {
@@ -17,21 +28,28 @@
   }
 
   body {
-    background-color: var(--bg);
-    color: var(--ink);
+    background-color: rgb(var(--bg));
+    color: rgb(var(--ink));
     font-family: theme("fontFamily.sans");
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }
 
   ::selection {
-    background: rgba(91, 91, 214, 0.18);
+    background: rgb(var(--accent) / 0.25);
   }
 
   *:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid rgb(var(--accent));
     outline-offset: 2px;
     border-radius: 6px;
+  }
+
+  /* Default border color follows the theme in dark mode */
+  .dark,
+  .dark::before,
+  .dark::after {
+    border-color: rgb(var(--line));
   }
 
   h1,
@@ -110,5 +128,37 @@
   min-height: 100dvh;
   background:
     radial-gradient(60rem 30rem at 50% -10rem, rgba(91, 91, 214, 0.08), transparent 70%),
-    var(--bg);
+    rgb(var(--bg));
+}
+
+/* Re-theme raw Tailwind gray utilities under .dark */
+@layer utilities {
+  .dark .bg-white {
+    background-color: rgb(var(--surface));
+  }
+  .dark .bg-gray-50,
+  .dark .bg-gray-100 {
+    background-color: rgb(var(--surface-2));
+  }
+  .dark .border-gray-200,
+  .dark .border-gray-300 {
+    border-color: rgb(var(--line));
+  }
+  .dark .text-gray-400,
+  .dark .text-gray-500,
+  .dark .text-gray-600 {
+    color: rgb(var(--muted));
+  }
+  .dark .text-gray-700,
+  .dark .text-gray-800,
+  .dark .text-gray-900 {
+    color: rgb(var(--ink));
+  }
+  .dark .bg-accent-soft,
+  .dark .hover\:bg-accent-soft:hover {
+    background-color: rgb(var(--accent) / 0.18);
+  }
+  .dark .hover\:bg-indigo-50:hover {
+    background-color: rgb(var(--accent) / 0.16);
+  }
 }

@@ -12,6 +12,7 @@ from app.db import get_db
 from app.engine import first_block, get_block, get_next_block
 from app.engine.flow import Block
 from app.integrations import build_event
+from app.actions import run_action
 from app.models import Answer, Bot, Conversation
 from app.security import normalize_slug, rate_limited, sanitize_value
 from app.tasks.dispatcher import dispatch
@@ -121,7 +122,9 @@ def _maybe_dispatch(
     completed: bool,
     answers: list[dict],
 ) -> None:
-    names = [n.strip() for n in settings.runtime_dispatch_integrations.split(",") if n.strip()]
+    from app.credentials import get_runtime_dispatch
+
+    names = get_runtime_dispatch()
     if not names:
         return
     event = build_event(
@@ -134,3 +137,61 @@ def _maybe_dispatch(
         completed=completed,
     )
     asyncio.create_task(dispatch(names, event))
+
+
+# Tipos de bloco que são "ações" executadas no backend (não pedem input do usuário)
+ACTION_TYPES = {
+    "ai",
+    "whatsapp",
+    "telegram",
+    "google_sheets",
+    "google_docs",
+    "http",
+    "payment",
+    "memory",
+    "file",
+}
+
+
+@router.post("/{slug}/action")
+async def run_block_action(
+    slug: str,
+    request: Request,
+    _: None = Depends(rate_limited("runtime")),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Executa um bloco de ação (IA, pagamento, Google, HTTP, memória, etc.)."""
+    bot = _bot_or_404(db, normalize_slug(slug))
+    body = await request.json()
+    block = body.get("block") or {}
+    conversation_id = body.get("conversationId")
+    variables = body.get("variables") or {}
+    action_type = block.get("type")
+    if not action_type or action_type not in ACTION_TYPES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="invalid action block")
+
+    config = block.get(action_type) or {}
+    context = {
+        "variables": variables,
+        "conversation_id": conversation_id,
+        "bot_slug": bot.slug,
+        "bot_name": bot.name,
+    }
+    result = await run_action(action_type, config, context)
+
+    # persiste o resultado numa variável para analytics
+    if result.get("variable") and result.get("value") is not None and conversation_id:
+        db.add(
+            Answer(
+                id=uuid.uuid4().hex,
+                botId=bot.id,
+                conversationId=conversation_id,
+                blockId=block.get("id"),
+                variable=result["variable"],
+                value=str(result["value"]),
+                createdAt=_now(),
+            )
+        )
+        db.commit()
+
+    return {"result": result}

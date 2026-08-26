@@ -1,7 +1,7 @@
 import aiosmtplib
 import httpx
 
-from app.config import settings
+from app.credentials import get_credentials
 from app.integrations.base import IntegrationAdapter
 
 
@@ -9,7 +9,8 @@ class EmailAdapter(IntegrationAdapter):
     name = "email"
 
     async def send(self, event: dict) -> None:
-        if not settings.smtp_host and not settings.sendgrid_api_key:
+        creds = get_credentials("email")
+        if not creds.get("smtp_host") and not creds.get("sendgrid_api_key"):
             return
         to = event.get("_to")
         if not to:
@@ -20,15 +21,15 @@ class EmailAdapter(IntegrationAdapter):
             f"Conversation: {event['conversation_id']}\n"
             f"{event.get('variable') or 'answer'}: {event.get('value')}\n"
         )
-        if settings.sendgrid_api_key:
-            await self._sendgrid(to, subject, body)
+        if creds.get("sendgrid_api_key"):
+            await self._sendgrid(to, subject, body, creds)
         else:
-            await self._smtp(to, subject, body)
+            await self._smtp(to, subject, body, creds)
 
-    async def _sendgrid(self, to: str, subject: str, body: str) -> None:
+    async def _sendgrid(self, to: str, subject: str, body: str, creds: dict) -> None:
         payload = {
             "personalizations": [{"to": [{"email": to}]}],
-            "from": {"email": settings.smtp_from},
+            "from": {"email": creds.get("smtp_from")},
             "subject": subject,
             "content": [{"type": "text/plain", "value": body}],
         }
@@ -36,18 +37,18 @@ class EmailAdapter(IntegrationAdapter):
             await client.post(
                 "https://api.sendgrid.com/v3/mail/send",
                 json=payload,
-                headers={"Authorization": f"Bearer {settings.sendgrid_api_key}"},
+                headers={"Authorization": f"Bearer {creds['sendgrid_api_key']}"},
             )
 
-    async def _smtp(self, to: str, subject: str, body: str) -> None:
+    async def _smtp(self, to: str, subject: str, body: str, creds: dict) -> None:
         await aiosmtplib.send(
             message=body,
-            sender=settings.smtp_from,
+            sender=creds.get("smtp_from"),
             recipients=[to],
             subject=subject,
-            hostname=settings.smtp_host,
-            port=settings.smtp_port,
-            username=settings.smtp_user,
-            password=settings.smtp_password,
-            start_tls=settings.smtp_use_tls,
+            hostname=creds.get("smtp_host"),
+            port=int(creds.get("smtp_port", 587)),
+            username=creds.get("smtp_user"),
+            password=creds.get("smtp_password"),
+            start_tls=bool(creds.get("smtp_use_tls", True)),
         )

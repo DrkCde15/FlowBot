@@ -1,6 +1,6 @@
 import httpx
 
-from app.config import settings
+from app.credentials import get_credentials
 from app.integrations.base import IntegrationAdapter
 
 
@@ -8,9 +8,12 @@ class TelegramAdapter(IntegrationAdapter):
     name = "telegram"
 
     async def send(self, event: dict) -> None:
-        if not settings.telegram_bot_token or not settings.telegram_chat_id:
+        creds = get_credentials("telegram")
+        token = creds.get("bot_token")
+        chat_id = event.get("_to") or event.get("chat_id") or creds.get("chat_id")
+        if not token or not chat_id:
             return
         text = f"[{event['bot_name']}] {event.get('variable') or 'answer'}: {event.get('value')}"
-        url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage"
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
         async with httpx.AsyncClient(timeout=10) as client:
-            await client.post(url, json={"chat_id": settings.telegram_chat_id, "text": text})
+            await client.post(url, json={"chat_id": chat_id, "text": text})

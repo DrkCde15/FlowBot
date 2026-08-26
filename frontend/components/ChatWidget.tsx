@@ -1,20 +1,31 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Block, Theme } from "@/lib/flow";
+import { Block, Theme, ACTION_TYPES } from "@/lib/flow";
 import { firstBlock, getBlock, getNextBlock } from "@/lib/engine";
+import { python } from "@/lib/python_client";
 
 type Step = {
   block: Block;
   userValue?: string;
   isUser?: boolean;
+  actionResult?: ActionResult | null;
+};
+
+type ActionResult = {
+  result?: string;
+  tokens?: { prompt: number; completion: number; total: number };
+  url?: string;
+  variable?: string;
+  value?: string;
+  error?: string;
+  status?: number;
 };
 
 const needsInput = (b: Block) =>
-  b.type === "input" ||
-  b.type === "buttons" ||
-  b.type === "date" ||
-  b.type === "stripe";
+  b.type === "input" || b.type === "buttons" || b.type === "date";
+
+const isAction = (b: Block) => (ACTION_TYPES as string[]).includes(b.type);
 
 export default function ChatWidget({
   flow,
@@ -29,11 +40,13 @@ export default function ChatWidget({
 }) {
   const [steps, setSteps] = useState<Step[]>([]);
   const [active, setActive] = useState<Block | null>(null);
+  const [pendingAction, setPendingAction] = useState<Block | null>(null);
   const [input, setInput] = useState("");
   const [dateValue, setDateValue] = useState("");
   const [finished, setFinished] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [variables, setVariables] = useState<Record<string, string>>({});
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const style = useMemo(
@@ -67,6 +80,7 @@ export default function ChatWidget({
     (block: Block | null) => {
       if (!block) {
         setActive(null);
+        setPendingAction(null);
         setFinished(true);
         return;
       }
@@ -74,18 +88,54 @@ export default function ChatWidget({
         setActive(block);
         return;
       }
+      if (isAction(block)) {
+        setPendingAction(block);
+        runActionBlock(block);
+        return;
+      }
       // message blocks: display then auto-advance
       setSteps((s) => [...s, { block }]);
       const nxt = getBlock(flow, block.next) ?? null;
-      // small delay for a natural feel
       setTimeout(() => showBlock(nxt), 250);
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [flow]
+  );
+
+  const runActionBlock = useCallback(
+    async (block: Block) => {
+      let result: ActionResult | null = null;
+      if (live && slug) {
+        try {
+          const res = await python.runAction(slug, {
+            conversationId: conversationId ?? undefined,
+            block: block as any,
+            variables,
+          });
+          result = res.result;
+        } catch (e) {
+          result = { error: String(e) };
+        }
+      } else {
+        result = { result: `🔧 Ação (${block.type}) — modo preview` };
+      }
+
+      if (result?.variable && result?.value != null) {
+        setVariables((v) => ({ ...v, [result!.variable!]: String(result!.value) }));
+      }
+      setPendingAction(null);
+      setSteps((s) => [...s, { block, actionResult: result }]);
+      const nxt = getBlock(flow, block.next) ?? null;
+      setTimeout(() => showBlock(nxt), 350);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [live, slug, flow, conversationId, variables, showBlock]
   );
 
   const start = useCallback(async () => {
     setSteps([]);
     setFinished(false);
+    setVariables({});
     if (live && slug) {
       const res = await fetch(`/api/runtime/${slug}/start`, { method: "POST" });
       const data = await res.json();
@@ -103,7 +153,7 @@ export default function ChatWidget({
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [steps, active]);
+  }, [steps, active, pendingAction]);
 
   const submit = useCallback(
     async (block: Block, value: string, variable?: string) => {
@@ -112,6 +162,7 @@ export default function ChatWidget({
       setActive(null);
       setInput("");
       setDateValue("");
+      if (variable) setVariables((v) => ({ ...v, [variable]: value }));
       await persist(block, variable, value);
 
       const next = getNextBlock(flow, block, value);
@@ -126,7 +177,28 @@ export default function ChatWidget({
         {steps.map((s, i) => (
           <Bubble key={i} step={s} theme={theme} />
         ))}
-        {active && <ActiveBlock block={active} theme={theme} input={input} setInput={setInput} dateValue={dateValue} setDateValue={setDateValue} onSubmit={submit} loading={loading} />}
+        {pendingAction && (
+          <div className="flex animate-fade-up justify-start">
+            <div
+              className="max-w-[85%] rounded-[var(--fb-radius)] px-3.5 py-3 text-sm"
+              style={{ background: "#eef1f6", color: theme.fontColor }}
+            >
+              <span className="opacity-70">Executando {pendingAction.type}…</span>
+            </div>
+          </div>
+        )}
+        {active && (
+          <ActiveBlock
+            block={active}
+            theme={theme}
+            input={input}
+            setInput={setInput}
+            dateValue={dateValue}
+            setDateValue={setDateValue}
+            onSubmit={submit}
+            loading={loading}
+          />
+        )}
         {finished && (
           <div className="flex animate-fade-up justify-center py-1">
             <span className="rounded-full bg-surface-2 px-3 py-1 text-xs font-medium text-muted">
@@ -152,7 +224,60 @@ function Bubble({ step, theme }: { step: Step; theme: Theme }) {
       </div>
     );
   }
+
   const b = step.block;
+  const res = step.actionResult;
+
+  // bloco de ação com resultado
+  if (res) {
+    return (
+      <div className="flex animate-fade-up justify-start">
+        <div
+          className="max-w-[85%] rounded-[var(--fb-radius)] px-3.5 py-3 text-sm"
+          style={{ background: "#eef1f6", color: theme.fontColor }}
+        >
+          {res.error ? (
+            <span className="text-red-600">⚠️ {res.error}</span>
+          ) : (
+            <>
+              {res.result && (
+                <div className="whitespace-pre-wrap">{res.result}</div>
+              )}
+              {res.url && b.type === "payment" && (
+                <a
+                  href={res.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-2 inline-block rounded-xl px-4 py-2 font-semibold text-white"
+                  style={{ background: theme.primaryColor }}
+                >
+                  Pagar ↗
+                </a>
+              )}
+              {res.url && b.type === "file" && (
+                <a
+                  href={res.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-2 inline-block rounded-xl px-4 py-2 font-semibold text-white"
+                  style={{ background: theme.primaryColor }}
+                >
+                  Baixar arquivo ↓
+                </a>
+              )}
+              {res.tokens && (
+                <div className="mt-2 text-xs text-gray-500">
+                  🪙 tokens: {res.tokens.total} (prompt {res.tokens.prompt} / completion{" "}
+                  {res.tokens.completion})
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex animate-fade-up justify-start">
       <div
@@ -262,16 +387,6 @@ function ActiveBlock({
               </button>
             ))}
           </div>
-        )}
-
-        {block.type === "stripe" && (
-          <button
-            onClick={() => onSubmit(block, "paid", block.variable)}
-            className="rounded-xl px-4 py-2.5 font-semibold text-white shadow-glow transition hover:brightness-110 active:scale-[0.98]"
-            style={{ background: primary }}
-          >
-            Pay {block.stripe?.amount ? `$${(block.stripe.amount / 100).toFixed(2)}` : ""} ↗
-          </button>
         )}
       </div>
     </div>

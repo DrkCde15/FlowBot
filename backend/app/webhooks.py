@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
 
 from app.config import settings
+from app.credentials import get_credentials
 from app.security import rate_limited, verify_signature
 
 router = APIRouter(prefix="/api/v1/webhooks", tags=["webhooks"])
@@ -26,7 +27,5 @@ async def inbound_webhook(
 
 
 def _secret_for(provider: str) -> str:
-    return {
-        "n8n": settings.n8n_webhook_secret,
-        "crm": settings.crm_webhook_secret,
-    }.get(provider, settings.integrations_secret) or settings.integrations_secret
+    creds = get_credentials(provider)
+    return creds.get("webhook_secret") or settings.integrations_secret

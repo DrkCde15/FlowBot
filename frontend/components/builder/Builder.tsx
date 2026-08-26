@@ -6,6 +6,7 @@ import { Block, BlockType, Theme } from "@/lib/flow";
 import ChatWidget from "@/components/ChatWidget";
 import FlowCanvas from "./FlowCanvas";
 import BlockInspector from "./BlockInspector";
+import ThemeToggle from "@/components/ThemeToggle";
 
 const PALETTE: { type: BlockType; label: string; icon: string }[] = [
   { type: "text", label: "Text", icon: "💬" },
@@ -13,7 +14,15 @@ const PALETTE: { type: BlockType; label: string; icon: string }[] = [
   { type: "input", label: "Input", icon: "⌨️" },
   { type: "buttons", label: "Buttons", icon: "🔘" },
   { type: "date", label: "Date", icon: "📅" },
-  { type: "stripe", label: "Stripe", icon: "💳" },
+  { type: "ai", label: "IA", icon: "🤖" },
+  { type: "payment", label: "Pagamento", icon: "💰" },
+  { type: "whatsapp", label: "WhatsApp", icon: "📱" },
+  { type: "telegram", label: "Telegram", icon: "✈️" },
+  { type: "google_sheets", label: "Sheets", icon: "📊" },
+  { type: "google_docs", label: "Docs", icon: "📄" },
+  { type: "http", label: "HTTP", icon: "🌐" },
+  { type: "memory", label: "Memória", icon: "🧠" },
+  { type: "file", label: "Arquivo", icon: "📁" },
 ];
 
 function newBlock(type: BlockType, index: number): Block {
@@ -44,13 +53,24 @@ function newBlock(type: BlockType, index: number): Block {
       };
     case "date":
       return { ...base, label: "Pick a date", variable: "date" };
-    case "stripe":
-      return {
-        ...base,
-        label: "Complete your payment",
-        variable: "payment",
-        stripe: { amount: 1000, currency: "usd", mode: "payment" },
-      };
+    case "ai":
+      return { ...base, ai: { provider: "openai", model: "gpt-4o-mini", prompt: "Responda de forma curta: {{name}}" } };
+    case "payment":
+      return { ...base, payment: { provider: "mercadopago", amount: 1000, currency: "BRL", description: "Pagamento" } };
+    case "whatsapp":
+      return { ...base, whatsapp: { to: "", message: "Olá {{name}}!" } };
+    case "telegram":
+      return { ...base, telegram: { to: "", message: "Olá {{name}}!" } };
+    case "google_sheets":
+      return { ...base, google_sheets: { spreadsheetId: "", sheet: "Sheet1", values: "{{name}},{{email}}" } };
+    case "google_docs":
+      return { ...base, google_docs: { documentId: "", text: "Novo lead: {{name}}" } };
+    case "http":
+      return { ...base, http: { method: "POST", url: "", headers: "{}", body: "" } };
+    case "memory":
+      return { ...base, memory: { operation: "set", key: "last_user", value: "{{name}}", dbType: "sqlite" } };
+    case "file":
+      return { ...base, file: { operation: "export_json" } };
   }
 }
 
@@ -93,6 +113,39 @@ export default function Builder({
 
   const selected = flow.find((b) => b.id === selectedId) || null;
 
+  const exportFlow = () => {
+    const payload = JSON.stringify(
+      { name, slug, published, flow, theme },
+      null,
+      2
+    );
+    const blob = new Blob([payload], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${slug || "bot"}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importFlow = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const data = JSON.parse(await file.text());
+      if (Array.isArray(data.flow)) {
+        setName(data.name ?? name);
+        setSlug(data.slug ?? slug);
+        setFlow(data.flow);
+        if (data.theme) setTheme(data.theme);
+      }
+    } catch (err) {
+      alert("Arquivo inválido: " + String(err));
+    } finally {
+      e.target.value = "";
+    }
+  };
+
   const addBlock = (type: BlockType) =>
     setFlow((f) => {
       const block = newBlock(type, f.length);
@@ -122,7 +175,7 @@ export default function Builder({
     return (
       <div className="flex h-screen flex-col">
         <div className="flex items-center gap-2 border-b bg-white px-4 py-2">
-          <button className="rounded bg-gray-900 px-3 py-1 text-sm text-white" onClick={() => setPreview(false)}>
+          <button className="btn-primary px-3 py-1 text-sm" onClick={() => setPreview(false)}>
             ← Back to editor
           </button>
           <span className="text-sm text-gray-500">Preview (not saved to server)</span>
@@ -138,10 +191,11 @@ export default function Builder({
     <div className="flex h-screen flex-col bg-gray-50">
       <header className="flex items-center gap-3 border-b bg-white px-4 py-2">
         <a href="/dashboard" className="text-sm text-indigo-600">← Bots</a>
+        <a href="/integrations" className="text-sm text-indigo-600">Integrações</a>
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="flex-1 rounded border px-2 py-1 text-sm font-semibold"
+          className="input flex-1"
         />
         <span className="text-xs text-gray-400">{saved ? "Saved" : "Saving…"}</span>
         <button className="rounded bg-indigo-600 px-3 py-1 text-sm text-white" onClick={() => setPreview(true)}>
@@ -151,6 +205,14 @@ export default function Builder({
           <input type="checkbox" checked={published} onChange={(e) => setPublished(e.target.checked)} />
           Live
         </label>
+        <button className="btn-primary px-3 py-1 text-sm" onClick={exportFlow}>
+          Exportar
+        </button>
+        <label className="btn-primary cursor-pointer px-3 py-1 text-sm">
+          Importar
+          <input type="file" accept="application/json" className="hidden" onChange={importFlow} />
+        </label>
+        <ThemeToggle />
       </header>
 
       <div className="flex flex-1 overflow-hidden">
@@ -162,7 +224,7 @@ export default function Builder({
               <button
                 key={p.type}
                 onClick={() => addBlock(p.type)}
-                className="flex flex-col items-center rounded border p-2 text-xs hover:bg-indigo-50"
+                className="flex flex-col items-center rounded border p-2 text-xs hover:bg-accent-soft"
               >
                 <span className="text-lg">{p.icon}</span>
                 {p.label}

@@ -7,3 +7,5 @@ node_modules
 data/
 tsconfig.tsbuildinfo
 .venv/
+.pytest_cache*
+.__pycache__/*

@@ -43,3 +43,18 @@ class Answer(Base):
     variable: Mapped[str | None] = mapped_column(String, nullable=True)
     value: Mapped[str] = mapped_column(Text)
     createdAt: Mapped[str | None] = mapped_column(String, nullable=True)
+
+
+class IntegrationConfig(Base):
+    """Credenciais de integrações salvas no banco (em vez de .env).
+
+    `id` é o nome da integração (ex: "telegram", "ai", "payment"...).
+    `config` é um JSON com as chaves/credenciais.
+    """
+
+    __tablename__ = "IntegrationConfig"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    config: Mapped[str] = mapped_column(Text, default="{}")
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    updatedAt: Mapped[str | None] = mapped_column(String, nullable=True)
